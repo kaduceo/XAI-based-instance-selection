@@ -1,6 +1,28 @@
+"""
+MMD-critic (https://papers.nips.cc/paper/2016/hash/5680522b8e2bb01943234bce7bf84534-Abstract.html)
+Copyright (C) 2016 Been Kim <beenkim@csail.mit.edu>
+Copyright (C) 2016 Rajiv Khanna <rajivak@utexas.edu>
+Copyright (C) 2016 Oluwasanmi Koyejo <sanmi@illinois.edu>
+
+mmdcritic.py
+Copyright (C) 2021 Elodie Escriva, Kaduceo <elodie.escriva@kaduceo.com>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+
 import numpy as np
-import pandas as pd
-import sklearn as sk
 
 from sklearn.metrics.pairwise import rbf_kernel
 
@@ -27,14 +49,24 @@ def calculate_kernel_individual(X, y, g=None):
 
 
 def greedy_select_protos(K, candidate_indices, m):
-    ##############################################################################################################################
-    # Function choose m of all rows by MMD as per kernelfunc
-    # ARGS:
-    # K : kernel matrix
-    # candidate_indices : array of potential choices for selections, returned values are chosen from these  indices
-    # m: number of selections to be made
-    # RETURNS: subset of candidate_indices which are selected as prototypes
-    ##############################################################################################################################
+    """
+    Select prototypes based on the kernel matrix.
+
+    Parameters
+    ----------
+    K : 2-dimension numpy array
+        Kernel matrix to use to select prototypes.
+    candidate_indices : numpy array
+        Array of the instances indices.
+    m : int
+        Number of prototypes to select.
+
+    Returns
+    -------
+    Numpy Array
+        Array of indices of the selected instances.
+
+    """
 
     if len(candidate_indices) != np.shape(K)[0]:
         K = K[:, candidate_indices][candidate_indices, :]
@@ -59,21 +91,31 @@ def greedy_select_protos(K, candidate_indices, m):
 
         argmax = candidates[np.argmax(s1array)]
         selected = np.append(selected, argmax)
-        KK = K[selected, :][:, selected]
 
     return candidate_indices[selected]
 
 
 def select_criticism_regularized(K, selectedprotos, m, reg="logdet"):
-    ##############################################################################################################################
-    # function to select criticisms
-    # ARGS:
-    # K: Kernel matrix
-    # selectedprotos: prototypes already selected
-    # m : number of criticisms to be selected
-    # reg: regularizer type.
-    # RETURNS: indices selected as criticisms
-    ##############################################################################################################################
+    """
+    Selects criticicms based on the previously selected prototypes and the input kernel matrix.
+
+    Parameters
+    ----------
+    K : 2-dimension numpy array
+        Kernel matrix to use to select criticisms.
+    selectedprotos : Numpy Array
+        Indices of the instances selected as prototypes.
+    m : int
+        Number of criticisms to select.
+    reg : string, optional
+        Name of the regulizer to use. Default "logdet".
+
+    Returns
+    -------
+    selected : Numpy Array
+        Array of indices of the selected instances.
+
+    """
 
     n = np.shape(K)[0]
     available_reg = {None, "logdet", "iterative"}
@@ -115,9 +157,8 @@ def select_criticism_regularized(K, selectedprotos, m, reg="logdet"):
         argmax = candidates[np.argmax(s1array)]
         selected = np.append(selected, argmax)
 
-        if reg == "logdet":
-            KK = K[selected, :][:, selected]
-            inverse_of_prev_selected = np.linalg.pinv(KK)  # shortcut
+        KK = K[selected, :][:, selected]
+        inverse_of_prev_selected = np.linalg.pinv(KK)  # shortcut
 
         if reg == "iterative":
             selectedprotos = np.append(selectedprotos, argmax)
@@ -125,19 +166,33 @@ def select_criticism_regularized(K, selectedprotos, m, reg="logdet"):
     return selected
 
 
-def mmd_critic(X, y, gamma, ktype, n, m, crit=True):
-    ##############################################################################################################################
-    # this function makes selects prototypes/criticisms and outputs the indices of the selected instances.
-    # ARGS:
-    # X: datas
-    # y: labels
-    # gamma: parameter for the kernel exp(- gamma * \| x1 - x2 \|_2)
-    # ktype: kernel type, 0 for global, 1 for local
-    # n : number of prototypes wanted
-    # m : number of criticisms wanted
-    # RETURNS: returns indices of  selected prototypes and criticisms
-    ##############################################################################################################################
+def mmd_critic(X, y, n, m, gamma=None, ktype=0, crit=True):
+    """
+    Selects the prototypes and criticisms instances from the input dataset.
+    
+    Parameters
+    ----------
+    X : Pandas DataFrame
+        Input dataset : Raw datas or influences.
+    y : Pandas DataFrame
+        Labels of the instances in the input dataset.
+    n : int
+        Number of prototypes desired.
+    m : int
+        Number of criticisms desired.
+    gamma : float, optional
+        parameter for the kernel exp(- gamma * \| x1 - x2 \|_2). Default None.
+    ktype : bool, optional
+        Type of kernel to use. 0 for global, 1 for local. Default 0.
+    crit : bool, optional
+        Flag to compute or not criticisms. Default True.
 
+    Returns
+    -------
+    Numpy Array
+        Array of the selected prototypes and criticism instances indices.
+
+    """
     if ktype == 0:
         kernel = calculate_kernel(X, gamma)
     else:
@@ -150,6 +205,4 @@ def mmd_critic(X, y, gamma, ktype, n, m, crit=True):
         critselected = select_criticism_regularized(kernel, selected, m, reg="logdet")
 
     return np.concatenate((selected, critselected))
-
-
 
