@@ -60,12 +60,14 @@ def kmedoids_selection(X, percentage):
 
     Returns
     -------
-    Numpy Array
-        The indices of the medoid rows in X.
+    sklearn_extra.cluster.KMedoids
+        Medoids created on X.
 
     """
 
     n_medoides = int(round(X.shape[0] * percentage, 0))
+    if n_medoides < 2:
+        n_medoides = 2
 
     # Clustering
     kmedoids = sklearn_extra.cluster.KMedoids(
@@ -77,7 +79,7 @@ def kmedoids_selection(X, percentage):
     )
     kmedoids.fit(X)
 
-    return kmedoids.medoid_indices_
+    return kmedoids
 
 
 def mmdcritic_selection(X, y, p_select, p_proto, gamma=None, ktype=0):
@@ -152,4 +154,3 @@ def submodular_pick_selection(X, percentage):
         selected_indices.append(best_ind)
         remaining_indices -= {best_ind}
     return selected_indices
-
