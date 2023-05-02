@@ -68,15 +68,35 @@ def compute_inter_inertia(centers, len_cluster):
     return inertia
 
 
-def compute_clusters_inertie(X, clusters_labels, centers):
+def compute_clusters_inertie(datas, clusters_labels, centers):
+    """
+    Compute intra and inter inertia for all clusters in parameter.
+
+    Parameters
+    ----------
+    datas : pandas.DataFrame
+        Datas of the elements used for clustering.
+    clusters_labels : dictionary
+        Labels of instances.
+    centers : pandas.DataFrame
+        Center of each cluster
+
+    Returns
+    -------
+    intra_inertia : dictionary
+        Intra inertia of the clustering.
+    inter_inertia : dictionary
+        Inter inertia of the clustering.
+
+    """
     len_cluster = []
     intra_inertia = 0
 
     for k in range(len(centers)):
-        datas_cluster = X.loc[clusters_labels == k]
+        datas_cluster = datas.loc[clusters_labels == k]
         len_cluster.append(len(datas_cluster))
         intra_inertia += compute_intra_inertia(datas_cluster, X.iloc[centers[k]])
-    inter_inertia = compute_inter_inertia(X.iloc[centers], len_cluster)
+    inter_inertia = compute_inter_inertia(datas.iloc[centers], len_cluster)
 
     return intra_inertia, inter_inertia
 
@@ -87,7 +107,7 @@ def compute_entropy_cluster(datas_y, nb_class):
 
     Parameters
     ----------
-    datas_y : Pandas DataFrame
+    datas_y : pandas.DataFrame
         labels of instances from the studied cluster.
     nb_class : int
         Number of classes
@@ -113,13 +133,13 @@ def compute_purity_cluster(datas_y):
 
     Parameters
     ----------
-    datas_y : pd.DataFrame
+    datas_y : pandas.DataFrame
         labels of instance from the studied cluster.
 
     Returns
     -------
     purity : float
-        the purity value for the studied cluster.
+        The purity value for the studied cluster.
 
     """
     return (1 / datas_y.shape[0]) * np.max(datas_y.value_counts())
@@ -133,15 +153,15 @@ def compute_clusters_purity_entropy(clusters_labels, y_labels):
     ----------
     clusters_labels : dictionary
         Labels of instances.
-    y_labels : Pandas DataFrame
+    y_labels : pandas.DataFrame
         Labels of all datas.
 
     Returns
     -------
     entropy : dictionary
-        Entropy for each numbers of clusters.
+        Entropy of the clustering.
     purity : dictionary
-        Purity for each numbers of clusters.
+        Purity of the clustering.
 
     """
     entropy = 0

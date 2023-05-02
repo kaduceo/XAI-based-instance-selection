@@ -20,21 +20,20 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import numpy as np
-import sklearn_extra.cluster
 
 from mmdcritic import mmd_critic
 
 
-def random_selection(X, percentage):
+def random_selection(datas, percentage):
     """
     Selects random instances from a pandas DataFrame.
 
     Parameters
     ----------
-    X : Pandas DataFrame
-        Raw datas or influences to compute.
+    datas : Pandas DataFrame
+        Datas to compute.
     percentage : float
-        Desired percentage of the total dataset desired as selected instances..
+        Desired percentage of the total dataset desired as selected instances.
 
     Returns
     -------
@@ -42,54 +41,19 @@ def random_selection(X, percentage):
         Indices of the selected instances.
 
     """
-    n_random = int(round(X.shape[0] * percentage, 0))
+    n_random = int(round(datas.shape[0] * percentage, 0))
 
-    return X.sample(n_random).index
-
-
-def kmedoids_selection(X, percentage):
-    """
-    Selects instances based on the medoids of a Kmedoids clustering.
-
-    Parameters
-    ----------
-    X : Pandas DataFrame
-        Raw datas or influences to compute.
-    percentage : float
-        Desired percentage of the total dataset desired as selected instances.
-
-    Returns
-    -------
-    sklearn_extra.cluster.KMedoids
-        Medoids created on X.
-
-    """
-
-    n_medoides = int(round(X.shape[0] * percentage, 0))
-    if n_medoides < 2:
-        n_medoides = 2
-
-    # Clustering
-    kmedoids = sklearn_extra.cluster.KMedoids(
-        n_clusters=n_medoides,
-        metric="euclidean",
-        init="k-medoids++",
-        max_iter=1000,
-        random_state=6,
-    )
-    kmedoids.fit(X)
-
-    return kmedoids
+    return datas.sample(n_random).index
 
 
-def mmdcritic_selection(X, y, p_select, p_proto, gamma=None, ktype=0):
+def mmdcritic_selection(datas, y, p_select, p_proto, gamma=None, ktype=0):
     """
     Adaptation of the MMD-critic method proposed by Kim et al. [2016]
 
     Parameters
     ----------
-    X : Pandas DataFrame
-        Raw datas or influences to compute.
+    datas : Pandas DataFrame
+        Datas to compute.
     y : Pandas.Series
         Labels of the instances in the input dataset.
     p_select : float
@@ -108,24 +72,24 @@ def mmdcritic_selection(X, y, p_select, p_proto, gamma=None, ktype=0):
 
     """
 
-    n_proto = int(round(X.shape[0] * p_select * p_proto, 0))
-    n_critic = int(round(X.shape[0] * p_select * (1 - p_proto), 0))
+    n_proto = int(round(datas.shape[0] * p_select * p_proto, 0))
+    n_critic = int(round(datas.shape[0] * p_select * (1 - p_proto), 0))
     if n_critic == 0:
         crit = False
     else:
         crit = True
 
-    return mmd_critic(X, y, n_proto, n_critic, gamma, ktype, crit)
+    return mmd_critic(datas, y, n_proto, n_critic, gamma, ktype, crit)
 
 
-def submodular_pick_selection(X, percentage):
+def submodular_pick_selection(datas, percentage):
     """
     Adaptation of the Submodular Pick method proposed by Ribeiro et al. [2016]
 
     Parameters
     ----------
-    X : Pandas DataFrame
-        Raw datas or influences to compute.
+    datas : Pandas DataFrame
+        Datas to compute.
     percentage : float,
         Desired percentage of the total dataset desired as selected instances.
 
@@ -135,10 +99,10 @@ def submodular_pick_selection(X, percentage):
         list of recommanded instances indices.
 
     """
-    n_instances = int(round(X.shape[0] * percentage, 0))
+    n_instances = int(round(datas.shape[0] * percentage, 0))
 
-    importance = np.sum(abs(X), axis=0) ** 0.5
-    remaining_indices = set(X.index)
+    importance = np.sum(abs(datas), axis=0) ** 0.5
+    remaining_indices = set(datas.index)
     selected_indices = []
     for _ in range(n_instances):
         best = 0
@@ -146,7 +110,7 @@ def submodular_pick_selection(X, percentage):
         current = 0
         for i in remaining_indices:
             current = np.dot(
-                (np.sum(abs(X.loc[selected_indices + [i]]), axis=0) > 0), importance
+                (np.sum(abs(datas.loc[selected_indices + [i]]), axis=0) > 0), importance
             )  # original coverage function
             if current >= best:
                 best = current

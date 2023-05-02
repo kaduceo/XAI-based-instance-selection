@@ -2,6 +2,15 @@
 utils.py
 Copyright (C) 2020 Elodie Escriva, Kaduceo <elodie.escriva@kaduceo.com>
 
+LIME (https://arxiv.org/abs/1602.04938)
+Copyright (c) 2016, Marco Tulio Correia Ribeiro
+
+KernelSHAP (https://arxiv.org/abs/1705.07874)
+Copyright (c) 2017, Scott Lundberg
+TreeSHAP (https://doi.org/10.1038/s42256-019-0138-9)
+Copyright (c) 2020, Scott Lundberg
+
+
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation; either version 3 of the License, or
@@ -16,19 +25,23 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import numpy as np
 import pandas as pd
+import sklearn as sk
 
 import shap
 import lime
 from lime import lime_tabular
 import openml as oml
 
-from sklearn.decomposition import PCA
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, OrdinalEncoder, LabelEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.compose import make_column_selector as selector
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import RepeatedKFold, GridSearchCV
 
 
 def process_dataset_openml(dataset_id, variable_pred):
@@ -44,12 +57,12 @@ def process_dataset_openml(dataset_id, variable_pred):
     Returns
     -------
     X_process : pandas.DataFrame
-        Process datas from the dataset.
+        Process data from the dataset.
     y_process : pandas.DataFrame
-        Process datas from the dataset.
+        Process data from the dataset.
     """
     dataset = oml.datasets.get_dataset(dataset_id)
-    X, y, categorical_indicator, attribute_names = dataset.get_data(
+    X, y, _, _ = dataset.get_data(
         dataset_format="dataframe", target=dataset.default_target_attribute
     )
 
@@ -82,36 +95,131 @@ def process_dataset_openml(dataset_id, variable_pred):
     return X_process, y_process
 
 
-def TreeSHAP_positive_class(modele_, X_, y_):
+def fct_RF_gridsearch(X, y, n_folds=5, param_grid=None):
+    """
+    Search the best parameters for Random Forest, based on the data and labels in parameters.
+
+    Parameters
+    ----------
+    X : pandas.DataFrame
+        Data to train the model.
+    y : pandas.DataFrame
+        Labels of the data.
+    n_folds : int. Default 5.
+        Number of fold for the Reapeated Cross-Validation.
+    param_grid : dictionnary. Default None.
+        Grid of parameters to test during Grid Search
+
+    Returns
+    -------
+    Sklearn.ensemble.RandomForestClassifier
+        Model with the best parameters based on the Grid Search Repeated k-folds Cross-Validation.
+    """
+    type_CV = RepeatedKFold(n_splits=n_folds, n_repeats=1)
+
+    if param_grid is None:
+        param_grid = {
+            "n_estimators": [100, 200, 500],
+            "max_depth": [2, 3, 4, 5, 6],
+            "min_samples_split": [2, 4, 8],
+        }
+
+    gs_repeatedCV = GridSearchCV(
+        estimator=RandomForestClassifier(),
+        param_grid=param_grid,
+        cv=type_CV,
+        scoring="balanced_accuracy",
+        refit=False,
+    )
+
+    gs_repeatedCV.fit(X.values, y.values)
+
+    return RandomForestClassifier(**gs_repeatedCV.best_params_)
+
+
+def TreeSHAP_oneclass(model, X, look_at=1):
+    """
+    Explains the modelling with the TreeSHAP methods for one class. (Lundberg, 2020)
+
+    Parameters
+    ----------
+    model
+        Model trained during the modelling.
+    X : pandas.DataFrame
+        Data used for the modelling.
+    look_at : int. Default 1.
+        Class to look at for explanations.
+
+    Returns
+    -------
+    pandas.DataFrame
+        TreeSHAP explanations of the modelling for the selected class.
+    """
     tree_shap_explainer_global = shap.TreeExplainer(
-        modele_,
-        data=X_.values,
+        model,
+        data=X.values,
         feature_perturbation="interventional",
         model_output="probability",
     )
     treeshap_values = tree_shap_explainer_global.shap_values(
-        X_.values, check_additivity=True
-    )[
-        1
-    ]  # On veut uniquement la classe positive, donc [1]
-    return pd.DataFrame(treeshap_values, columns=X_.columns, index=X_.index)
+        X.values, check_additivity=True
+    )[look_at]
+    return pd.DataFrame(treeshap_values, columns=X.columns, index=X.index)
 
 
-def KernelSHAP_positive_class(modele_, X_, y_, num_kmeans=5):
+def KernelSHAP_oneclass(model, X, look_at=1, num_kmeans=5):
+    """
+    Explains the modelling with the KernelSHAP methods for one class. (Lundberg, 2017)
+
+    Parameters
+    ----------
+    model
+        Model trained during the modelling.
+    X : pandas.DataFrame
+        Data used for the modelling.
+    look_at : int. Default 1.
+        Class to look at for explanations.
+    num_kmeans : int. Default 5.
+        Number of clusters for summarising the data.
+
+    Returns
+    -------
+    pandas.DataFrame
+        KernelSHAP explanations of the modelling for the selected class.
+    """
     kernel_shap_explainer_global = shap.KernelExplainer(
-        modele_.predict_proba, data=shap.kmeans(X_.values, num_kmeans)
+        model.predict_proba, data=shap.kmeans(X.values, num_kmeans)
     )
     kernelshap_values = kernel_shap_explainer_global.shap_values(
-        X_.values, check_additivity=True
-    )[
-        1
-    ]  # On veut uniquement la classe positive, donc [1]
-    return pd.DataFrame(kernelshap_values, columns=X_.columns, index=X_.index)
+        X.values, check_additivity=True
+    )[look_at]
+    return pd.DataFrame(kernelshap_values, columns=X.columns, index=X.index)
 
 
-def LIME_positive_class(
-    modele_, X, y, mode="classification", look_at=1, num_samples=100
-):
+def LIME_oneclass(model, X, mode="classification", look_at=1, num_samples=100):
+    """
+    Explains the modelling with the LIME methods for one class. (Ribeiro, 2016)
+
+    Parameters
+    ----------
+    model
+        Model trained during the modelling.
+    X : pandas.DataFrame
+        Data used for the modelling.
+    mode : 'classification' or 'regression'
+        Type of modelling.
+    look_at : int. Default 1.
+        Class to look at for explanations.
+    num_samples : int. Default 100
+        Size of the neighborhood to learn the linear model
+
+    Returns
+    -------
+    lime_values : pandas.DataFrame
+        LIME explanations of the modelling for the selected class.
+    explanations : shap.Explanation
+        Explanation compatible with shap
+    """
     explainer = lime_tabular.LimeTabularExplainer(
         X.values, mode=mode, feature_names=X.columns
     )
@@ -119,10 +227,10 @@ def LIME_positive_class(
         [
             [
                 v
-                for (k, v) in sorted(
+                for (_, v) in sorted(
                     explainer.explain_instance(
                         X.values[i],
-                        modele_.predict_proba,
+                        model.predict_proba,
                         labels=(look_at,),
                         num_samples=num_samples,
                         num_features=X.shape[1],
@@ -133,7 +241,8 @@ def LIME_positive_class(
         ]
     )
 
-    # Generate explanation compatible with shap
+    lime_values = pd.DataFrame(inf_values, columns=X.columns, index=X.index)
+
     explanation = shap.Explanation(
         inf_values,
         base_values=np.zeros(X.shape[0]),
@@ -141,6 +250,4 @@ def LIME_positive_class(
         feature_names=X.columns.to_list(),
     )
 
-    shap_values = pd.DataFrame(inf_values, columns=X.columns, index=X.index)
-
-    return shap_values
+    return lime_values, explanation
