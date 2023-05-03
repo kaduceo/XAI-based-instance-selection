@@ -123,8 +123,9 @@ def compute_entropy_cluster(datas_y, nb_class):
     n_i = datas_y.value_counts()
     n = datas_y.shape[0]
     for i in n_i.index:
-        entropy += (n_i[i] / n) * (np.log(n_i[i]) - np.log(n))
-    return (-1 / np.log(nb_class)) * entropy
+        if n_i[i] != 0:
+            entropy += (n_i[i] / n) * (np.log(n_i[i]) - np.log(n))
+    return np.abs((-1 / np.log(nb_class)) * entropy)
 
 
 def compute_purity_cluster(datas_y):
