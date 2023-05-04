@@ -95,7 +95,7 @@ def compute_clusters_inertie(datas, clusters_labels, centers):
     for k in range(len(centers)):
         datas_cluster = datas.loc[clusters_labels == k]
         len_cluster.append(len(datas_cluster))
-        intra_inertia += compute_intra_inertia(datas_cluster, X.iloc[centers[k]])
+        intra_inertia += compute_intra_inertia(datas_cluster, datas.iloc[centers[k]])
     inter_inertia = compute_inter_inertia(datas.iloc[centers], len_cluster)
 
     return intra_inertia, inter_inertia

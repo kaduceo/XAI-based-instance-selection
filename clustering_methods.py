@@ -19,9 +19,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import sklearn_extra.cluster
 
 
-def kmedoids_selection(datas, percentage):
+def kmedoids_clustering(datas, percentage):
     """
-    Clusters instances with a Kmedoids clustering, based on the percentage of the global dataset,
+    Clusters instances with a Kmedoids clustering.
+    Number of cluster is defined as a percentage of the global dataset,
     with a minimum of two clusters.
 
     Parameters
@@ -52,3 +53,25 @@ def kmedoids_selection(datas, percentage):
     kmedoids.fit(datas)
 
     return kmedoids
+
+
+def cluster_multiple_percentage(datas, list_percentages):
+    """
+    Apply k-medoid clustering on the data, for each percentage in the list.
+
+
+    Parameters
+    ----------
+    datas : pandas.DataFrame
+        Datas to cluster.
+    list_percentages : list
+        List of percentages to used for computing the number of clusters.
+
+    Returns
+    -------
+    dict
+        Clusters for each percentage.
+
+    """
+
+    return {p: kmedoids_clustering(datas, p) for p in list_percentages}
