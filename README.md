@@ -1,4 +1,4 @@
-# XAI-based instance selection
+# XAI-based clustering and instance selection
 ---
 
 This repository contains code and example notebooks related to the following paper :
