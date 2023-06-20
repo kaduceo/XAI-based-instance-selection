@@ -5,7 +5,7 @@ This repository contains code and example notebooks related to the following pap
 - **How to make the most of local explanations: effective clustering based on influences**, E. Escriva et al. (*accepted at the ADBIS 2023 Conference*)
 - **Data exploration based on local attribution explanation: a medical use case**, E. Escriva et al. (*accepted at the EXEC-MAN 2023 Workshop, host at the ADBIS 2023 Conference*)
 
-This paper present the first global method to explore influences as a new data space.
+These papers present the first global method to explore influences as a new data space.
 
 **Available Code Files:**
 - Clustering Methods : Methods adapted to clusters influence explanations.
