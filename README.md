@@ -1,4 +1,4 @@
-# XAI-based instance selection
+# XAI-based clustering and instance selection
 ---
 
 This repository contains code and example notebooks related to the following paper :
@@ -13,4 +13,4 @@ This paper present the first global method to explore influences as a new data s
 - MMD-Critic :  Implementation of [MMD-Critic](https://proceedings.neurips.cc/paper/2016/hash/5680522b8e2bb01943234bce7bf84534-Abstract.html), based on the [one](https://github.com/BeenKim/MMD-critic) from authors. (*consider leaving a :star: on their repository to support authors releasing their code.*)
 
 **Examples:**
-- [Medical example : Urinary Inflammation Disease](https://github.com/kaduceo/XAI-based-instance-selection/medical_example_aiub.ipynb)
+- [Medical example : Urinary Inflammation Disease](https://github.com/kaduceo/XAI-based-instance-selection/blob/main/medical_example_aiub.ipynb)
