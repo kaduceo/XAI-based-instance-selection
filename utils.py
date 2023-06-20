@@ -28,11 +28,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import numpy as np
 import pandas as pd
 import sklearn as sk
+import openml as oml
 
 import shap
-import lime
 from lime import lime_tabular
-import openml as oml
+
+import xgboost as xgb
 
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
@@ -41,7 +42,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.compose import make_column_selector as selector
 
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import RepeatedKFold, GridSearchCV
+from sklearn.model_selection import RepeatedKFold, GridSearchCV, RepeatedStratifiedKFold
 
 
 def process_dataset_openml(dataset_id, variable_pred):
@@ -95,7 +96,9 @@ def process_dataset_openml(dataset_id, variable_pred):
     return X_process, y_process
 
 
-def fct_RF_gridsearch(X, y, n_folds=5, param_grid=None):
+def fct_RF_gridsearch(
+    X, y, n_folds=5, n_repeats=1, scoring="balanced_accuracy", param_grid=None
+):
     """
     Search the best parameters for Random Forest, based on the data and labels in parameters.
 
@@ -107,6 +110,10 @@ def fct_RF_gridsearch(X, y, n_folds=5, param_grid=None):
         Labels of the data.
     n_folds : int. Default 5.
         Number of fold for the Reapeated Cross-Validation.
+    n_repeats : int. Default 1.
+        Number of times cross-validator needs to be repeated.
+    scoring : string. Default balanced accuracy.
+        Strategy to evaluate the performance of the cross-validated model on the test set.
     param_grid : dictionnary. Default None.
         Grid of parameters to test during Grid Search
 
@@ -115,26 +122,84 @@ def fct_RF_gridsearch(X, y, n_folds=5, param_grid=None):
     Sklearn.ensemble.RandomForestClassifier
         Model with the best parameters based on the Grid Search Repeated k-folds Cross-Validation.
     """
-    type_CV = RepeatedKFold(n_splits=n_folds, n_repeats=1)
+    type_CV = RepeatedKFold(n_splits=n_folds, n_repeats=n_repeats)
 
     if param_grid is None:
         param_grid = {
-            "n_estimators": [100, 200, 500],
-            "max_depth": [2, 3, 4, 5, 6],
-            "min_samples_split": [2, 4, 8],
+            "n_estimators": [50, 100, 200, 500],
+            "max_depth": [None, 2, 5, 10, 15],
+            "min_samples_split": [2, 5, 10],
         }
 
     gs_repeatedCV = GridSearchCV(
         estimator=RandomForestClassifier(),
         param_grid=param_grid,
         cv=type_CV,
-        scoring="balanced_accuracy",
+        scoring=scoring,
         refit=False,
     )
 
     gs_repeatedCV.fit(X.values, y.values)
 
     return RandomForestClassifier(**gs_repeatedCV.best_params_)
+
+
+def fct_XGB_gridsearch(
+    X, y, n_folds=5, n_repeats=2, scoring="roc_auc", param_grid=None
+):
+    """
+    Search the best parameters for XGBoost, based on the data and labels in parameters.
+
+    Parameters
+    ----------
+    X : pandas.DataFrame
+        Data to train the model.
+    y : pandas.DataFrame
+        Labels of the data.
+    n_folds : int. Default 5.
+        Number of fold for the Reapeated Cross-Validation.
+    n_repeats : int. Default 2.
+        Number of times cross-validator needs to be repeated.
+    scoring : string. Default roc-auc.
+        Strategy to evaluate the performance of the cross-validated model on the test set.
+    param_grid : dictionnary. Default None.
+        Grid of parameters to test during Grid Search
+
+    Returns
+    -------
+    Sklearn.ensemble.RandomForestClassifier
+        Model with the best parameters based on the Grid Search Repeated k-folds Cross-Validation.
+    """
+    type_CV = RepeatedStratifiedKFold(n_splits=n_folds, n_repeats=n_repeats)
+
+    sqrt_colsample_bytree = np.sqrt(X.shape[1]) / X.shape[1]
+    balanced_scale_pos_weight = (y.squeeze() == 0).sum() / (y.squeeze() == 1).sum()
+
+    if param_grid is None:
+        param_grid = {
+            "objective": ["binary:logistic"],
+            "eval_metric": ["error"],
+            "max_depth": [4, 5, 6],
+            "n_estimators": [200],
+            "learning_rate": [0.1, 0.025],
+            "min_child_weight": [5, 10],
+            "subsample": [0.7, 1],
+            "colsample_bytree": [1, 0.5, sqrt_colsample_bytree],
+            "scale_pos_weight": [1, balanced_scale_pos_weight],
+            "use_label_encoder": [False],
+        }
+
+    gs_repeatedCV = GridSearchCV(
+        estimator=xgb.XGBClassifier(),
+        param_grid=param_grid,
+        cv=type_CV,
+        scoring=scoring,
+        refit=False,
+    )
+
+    gs_repeatedCV.fit(X, y)
+
+    return xgb.XGBClassifier(**gs_repeatedCV.best_params_)
 
 
 def TreeSHAP_oneclass(model, X, look_at=1):
@@ -161,9 +226,14 @@ def TreeSHAP_oneclass(model, X, look_at=1):
         feature_perturbation="interventional",
         model_output="probability",
     )
+
     treeshap_values = tree_shap_explainer_global.shap_values(
         X.values, check_additivity=True
-    )[look_at]
+    )
+
+    if isinstance(treeshap_values, list):
+        treeshap_values = treeshap_values[look_at]
+
     return pd.DataFrame(treeshap_values, columns=X.columns, index=X.index)
 
 
@@ -250,4 +320,4 @@ def LIME_oneclass(model, X, mode="classification", look_at=1, num_samples=100):
         feature_names=X.columns.to_list(),
     )
 
-    return lime_values, explanation
+    return lime_values

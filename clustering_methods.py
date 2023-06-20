@@ -17,6 +17,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import sklearn_extra.cluster
+import pandas as pd
+import numpy as np
+
+import six
+import sys
+
+sys.modules["sklearn.externals.six"] = six
+from skrules import SkopeRules
 
 
 def kmedoids_clustering(datas, percentage):
@@ -75,3 +83,57 @@ def cluster_multiple_percentage(datas, list_percentages):
     """
 
     return {p: kmedoids_clustering(datas, p) for p in list_percentages}
+
+
+def clustering_skoperules(datas, labels, max_depth=2):
+    """
+    Apply Skope Rules algorithm to pre-defined clusters.
+
+
+    Parameters
+    ----------
+    datas : pandas.DataFrame
+        Datas used to compute clusters.
+    labels : list
+        List of clusters labels.
+    max_depth : int. Default 2.
+        Maximum of comparison terms for the rules.
+
+    Returns
+    -------
+    dict
+        Clusters for each percentage.
+
+    """
+
+    df = pd.DataFrame(columns=["Cluster", "Rule", "Precision", "Recall"])
+    for cluster in np.unique(labels):
+        if cluster >= 0:  # -1 is the non clusterized for dbscan
+            # create target variable for individual cluster
+            yc = (labels == cluster) * 1
+            # use SkopeRules to identify rules with a maximum of comparison terms set in parameters
+            sr = SkopeRules(
+                feature_names=datas.columns,
+                max_depth=max_depth,
+                precision_min=0.1,
+                recall_min=0.01,
+                n_estimators=10,
+            ).fit(datas.values, yc)
+            df = pd.concat(
+                [
+                    df,
+                    pd.DataFrame(
+                        [
+                            [
+                                cluster,
+                                sr.rules_[0][0],
+                                sr.rules_[0][1][0],
+                                sr.rules_[0][1][1],
+                            ]
+                        ],
+                        columns=df.columns,
+                    ),
+                ],
+                ignore_index=True,
+            )
+    return df
